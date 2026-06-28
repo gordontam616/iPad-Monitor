@@ -288,7 +288,7 @@ const _H="http"+"s://";
    ===================================================================== */
 const BUS_STOPS = [
   { label:"大興街",   keyword:"大興街",   routes:["66M","66X","258D"] },
-  { label:"大興總站", keyword:"大興",     routes:["66M","66X"], mustEnd:true },
+  { label:"大興總站", keyword:"大興",     routes:["66M","66X"], mustEnd:true, destFilter:{ "66M":"荃灣", "66X":"奧運" } },
   { label:"台山小學", keyword:"台山",     routes:["960"] },
   { label:"翠林花園", keyword:"翠林",     routes:["A34"] },
 ];
@@ -375,6 +375,13 @@ async function renderBus(){
     if(cfg.routes){
       const set = cfg.routes.map(r=>r.toUpperCase());
       etas = etas.filter(e=> set.includes((e.route||"").toUpperCase()));
+    }
+    if(cfg.destFilter){
+      etas = etas.filter(e=>{
+        const df = cfg.destFilter[(e.route||"").toUpperCase()];
+        if(!df) return true;
+        return (e.dest_tc||"").includes(df);
+      });
     }
     etas = etas.filter(e=> e.eta);
 
