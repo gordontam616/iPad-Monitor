@@ -243,8 +243,8 @@ const BUS_STOPS = [
 ];
 // 輕鐵 getSchedule station_id（屯門大興一帶）
 const LRT_STATIONS = [
-  { label:"蔡意橋",   id:280, routes:["507","751"] },
-  { label:"大興（南）", id:240, routes:["507","610"] },
+  { label:"蔡意橋",   id:75,  routes:["507","751"] },
+  { label:"大興（南）", id:220, routes:["507","610"] },
 ];
 
 const KMB = _H+"data.etabus.gov.hk/v1/transport/kmb";
@@ -397,6 +397,7 @@ async function resolveLrtIds(){
       if(cn && !isNaN(id) && map[cn]==null) map[cn]=id;
     }
     for(const st of LRT_STATIONS){
+      if(st.id!=null) continue; // 保留手動指定的站號
       const k=normName(st.label);
       if(map[k]!=null) st.id=map[k];
     }
