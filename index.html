@@ -38,6 +38,12 @@
   .refresh.spin svg{animation:spin 1s linear infinite;}
   @keyframes spin{to{transform:rotate(360deg);}}
 
+  /* ===== Mode selector ===== */
+  .seg{display:inline-flex; background:var(--card2); border:1px solid var(--line); border-radius:12px; padding:3px; gap:3px; margin-bottom:14px;}
+  .seg-btn{appearance:none; -webkit-appearance:none; border:0; background:transparent; color:var(--sub); font-size:14px; font-weight:700; padding:8px 18px; border-radius:9px; cursor:pointer; font-family:inherit;}
+  .seg-btn.active{background:var(--accent); color:#04121f;}
+  .grp.hidden{display:none;}
+
   /* ===== Transport ===== */
   .grp{margin-bottom:18px;}
   .grp-h{display:flex; align-items:center; gap:8px; margin:0 2px 8px; }
@@ -175,12 +181,17 @@
     </div>
     <div id="busErr"></div>
 
-    <div class="grp">
+    <div class="seg" id="modeSeg">
+      <button class="seg-btn active" data-mode="bus">🚌 巴士</button>
+      <button class="seg-btn" data-mode="lrt">🚈 輕鐵</button>
+    </div>
+
+    <div class="grp" id="grpBus">
       <div class="grp-h"><div class="ic bus">🚌</div><h2>巴士到站</h2><span class="meta" id="busMeta"></span></div>
       <div id="busStops"></div>
     </div>
 
-    <div class="grp">
+    <div class="grp hidden" id="grpLrt">
       <div class="grp-h"><div class="ic lrt">🚈</div><h2>輕鐵到站</h2><span class="meta" id="lrtMeta"></span></div>
       <div id="lrtStops"></div>
     </div>
@@ -719,6 +730,16 @@ document.querySelectorAll(".tab").forEach(t=>{
 });
 $("#busRefresh").addEventListener("click", refreshBus);
 $("#wxRefresh").addEventListener("click", ()=>{ COORDS=null; refreshWx(); });
+
+document.querySelectorAll("#modeSeg .seg-btn").forEach(b=>{
+  b.addEventListener("click",()=>{
+    document.querySelectorAll("#modeSeg .seg-btn").forEach(x=>x.classList.remove("active"));
+    b.classList.add("active");
+    const mode=b.dataset.mode;
+    $("#grpBus").classList.toggle("hidden", mode!=="bus");
+    $("#grpLrt").classList.toggle("hidden", mode!=="lrt");
+  });
+});
 
 refreshBus();
 setInterval(()=>{ if(!$("#pageBus").classList.contains("hidden")) refreshBus(); }, 30000);
