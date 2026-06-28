@@ -132,6 +132,22 @@
   .tab .tl{font-size:11px; font-weight:600;}
   .tab.active{color:var(--accent);}
 
+  /* ===== Traffic ===== */
+  #pageTraffic{padding:0; position:relative; overflow:hidden;}
+  .map-wrap{position:absolute; inset:0;}
+  .map-wrap iframe{position:absolute; inset:0; width:100%; height:100%; border:0; display:block; background:var(--bg2);}
+  .tf-fallback{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; text-align:center; padding:24px; color:var(--sub); font-size:13px; line-height:1.7;}
+  .tf-top{position:absolute; top:calc(var(--safe-top) + 12px); left:12px; right:12px; z-index:5; pointer-events:none;}
+  .tf-title{display:inline-block; background:rgba(16,19,23,.82); -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px); border:1px solid var(--line); border-radius:14px; padding:8px 14px; pointer-events:auto;}
+  .tf-title .t1{font-size:15px; font-weight:800;}
+  .tf-title .t2{font-size:11px; color:var(--sub); margin-top:1px;}
+  .tf-legend{position:absolute; left:12px; bottom:calc(94px + var(--safe-bot)); z-index:5; background:rgba(16,19,23,.82); -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px); border:1px solid var(--line); border-radius:12px; padding:9px 11px; display:flex; flex-direction:column; gap:6px;}
+  .tf-legend .lg{display:flex; align-items:center; gap:8px; font-size:11.5px; color:var(--sub);}
+  .tf-legend .sw{width:18px; height:5px; border-radius:3px;}
+  .tf-ctrl{position:absolute; right:12px; bottom:calc(94px + var(--safe-bot)); z-index:5; display:flex; flex-direction:column; gap:8px;}
+  .tf-btn{width:44px; height:44px; border-radius:12px; background:rgba(16,19,23,.9); -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px); border:1px solid var(--line); color:var(--txt); font-size:24px; font-weight:700; display:grid; place-items:center; cursor:pointer; user-select:none;}
+  .tf-btn:active{transform:scale(.94);}
+  .tf-btn.rc{font-size:20px; color:var(--accent);}
   .skel{background:linear-gradient(90deg,#1b2026,#232a32,#1b2026); background-size:200% 100%; animation:sk 1.2s infinite; border-radius:8px; height:14px;}
   @keyframes sk{0%{background-position:200% 0;}100%{background-position:-200% 0;}}
   .center-note{text-align:center; color:var(--dim); font-size:12.5px; padding:8px;}
@@ -172,7 +188,32 @@
     <div class="center-note">點擊任何路線可展開該線「後兩班」到站時間</div>
   </section>
 
-  <!-- ============ PAGE 2: WEATHER ============ -->
+  <!-- ============ PAGE 2: TRAFFIC ============ -->
+  <section id="pageTraffic" class="page hidden">
+    <div class="map-wrap">
+      <div class="tf-fallback" id="tFallback">地圖載入中…<br>若長時間空白，<a class="link" id="tOpenExt" href="#" target="_blank" rel="noopener">按此用 Waze 開啟</a></div>
+      <iframe id="wazeFrame" allow="geolocation" referrerpolicy="no-referrer-when-downgrade"></iframe>
+    </div>
+    <div class="tf-top">
+      <div class="tf-title">
+        <div class="t1">🚦 實時交通</div>
+        <div class="t2" id="tUpd">載入中…</div>
+      </div>
+    </div>
+    <div class="tf-legend">
+      <div class="lg"><span class="sw" style="background:#34c759"></span>暢通</div>
+      <div class="lg"><span class="sw" style="background:#ffb020"></span>緩慢</div>
+      <div class="lg"><span class="sw" style="background:#ff5a5f"></span>擠塞</div>
+      <div class="lg"><span class="sw" style="background:#9b1c1c"></span>嚴重</div>
+    </div>
+    <div class="tf-ctrl">
+      <div class="tf-btn rc" id="tRecenter" title="回到我的位置">◎</div>
+      <div class="tf-btn" id="tZin">＋</div>
+      <div class="tf-btn" id="tZout">－</div>
+    </div>
+  </section>
+
+  <!-- ============ PAGE 3: WEATHER ============ -->
   <section id="pageWx" class="page hidden">
     <div class="phead">
       <div>
@@ -224,6 +265,7 @@
   <!-- ============ TABS ============ -->
   <nav class="tabs">
     <div class="tab active" data-tab="bus"><div class="ti">🚍</div><div class="tl">到站時間</div></div>
+    <div class="tab" data-tab="traffic"><div class="ti">🚦</div><div class="tl">實時交通</div></div>
     <div class="tab" data-tab="wx"><div class="ti">⛅</div><div class="tl">地區天氣</div></div>
   </nav>
 </div>
@@ -233,15 +275,12 @@ const _H="http"+"s://";
 /* =====================================================================
    設定：巴士站 & 輕鐵站
    ===================================================================== */
-// keyword = 站名關鍵字（會在九巴站名做模糊比對）
-// routes  = 若指定，只顯示呢啲路線（例如台山小學只顯示960）
 const BUS_STOPS = [
   { label:"大興街",   keyword:"大興街",   routes:["66M","66X","258D"] },
   { label:"大興總站", keyword:"大興",     routes:["66M","66X"], mustEnd:true },
   { label:"台山小學", keyword:"台山",     routes:["960"] },
   { label:"翠林花園", keyword:"翠林",     routes:["A34"] },
 ];
-// 輕鐵 getSchedule station_id（屯門大興一帶）
 const LRT_STATIONS = [
   { label:"蔡意橋",   id:75,  routes:["507","751"] },
   { label:"大興（南）", id:220, routes:["507","610"] },
@@ -316,7 +355,6 @@ async function renderBus(){
     const stops = findStops(cfg);
     if(!stops.length){ body.appendChild(el("div","empty","搵唔到呢個站")); continue; }
 
-    // 取所有匹配站的 stop-eta 再合併
     let etas=[];
     try{
       const res = await Promise.all(stops.map(s=> fetchJSON(`${KMB}/stop-eta/${s.stop}`).then(j=>j.data).catch(()=>[])));
@@ -327,16 +365,14 @@ async function renderBus(){
       const set = cfg.routes.map(r=>r.toUpperCase());
       etas = etas.filter(e=> set.includes((e.route||"").toUpperCase()));
     }
-    etas = etas.filter(e=> e.eta); // 只保留有班次
+    etas = etas.filter(e=> e.eta);
 
-    // group by route+dir+dest
     const groups={};
     for(const e of etas){
       const k = `${e.route}|${e.dir}|${e.dest_tc}`;
       (groups[k]=groups[k]||[]).push(e);
     }
     let keys = Object.keys(groups);
-    // 排序：用每組最早班次
     const firstMin = k=> Math.min(...groups[k].map(e=>minsFromNow(e.eta)).filter(v=>v!=null));
     keys.sort((a,b)=> (firstMin(a)) - (firstMin(b)) );
     keys.sort((a,b)=> a.split("|")[0].localeCompare(b.split("|")[0],"en",{numeric:true}) );
@@ -373,13 +409,12 @@ async function renderBus(){
 /* =====================================================================
    輕鐵 (MTR Light Rail real-time)
    ===================================================================== */
-function lrtMins(t){ // "3 分鐘" / "-" / "即將抵達"
+function lrtMins(t){
   if(!t) return null;
   if(/即將|抵達|arriving/i.test(t)) return 0;
   const m = t.match(/(\d+)/);
   return m? parseInt(m[1],10): null;
 }
-// 輕鐵站號自動校正：從 MTR 官方路線/站點資料比對站名（失敗則保留上面 hardcode 的 id）
 const LRT_CSV = _H+"opendata.mtr.com.hk/data/light_rail_routes_and_stops.csv";
 function normName(s){ return (s||"").replace(/[（）()\s]/g,""); }
 let lrtResolved=false;
@@ -418,7 +453,6 @@ async function renderLRT(){
     try{ data = await fetchJSON(`${LRT}?station_id=${st.id}`); }catch(e){}
     if(!data || data.status===0 || !data.platform_list){ body.appendChild(el("div","empty","暫時無班次資料")); continue; }
 
-    // 合併所有月台，按路線分組
     const groups={};
     for(const p of data.platform_list){
       for(const r of (p.route_list||[])){
@@ -467,7 +501,6 @@ async function refreshBus(){
 /* =====================================================================
    天氣
    ===================================================================== */
-// 部分天文台氣溫站坐標（用嚟揀最近站做地區名 + 官方氣溫）
 const HKO_STATIONS = [
   ["屯門",22.391,113.977],["天水圍",22.457,114.005],["元朗公園",22.443,114.027],
   ["流浮山",22.468,113.983],["石崗",22.435,114.085],["荃灣可觀",22.387,114.109],
@@ -505,11 +538,9 @@ function warnClass(code,name){
 
 async function loadWeather(lat,lon){
   $("#wxErr").innerHTML="";
-  // 地區名 + 官方氣溫
   const st = nearestStation(lat,lon);
   $("#wxLoc").textContent = st? st[0] : "我的位置";
 
-  // Open-Meteo（逐小時降雨）
   const omURL = `${_H}api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}`+
     `&current=temperature_2m,weather_code,precipitation`+
     `&hourly=temperature_2m,precipitation_probability,precipitation,weather_code`+
@@ -522,7 +553,6 @@ async function loadWeather(lat,lon){
     fetchJSON(_H+"data.weather.gov.hk/weatherAPI/opendata/weather.php?dataType=warnsum&lang=tc").catch(()=>null)
   ]);
 
-  // ----- 氣溫（優先用天文台最近站，否則 Open-Meteo current）-----
   let temp=null, cond="—", icon="🌡️";
   if(hkoCur && hkoCur.temperature && hkoCur.temperature.data){
     const match = hkoCur.temperature.data.find(d=> st && d.place===st[0]);
@@ -535,13 +565,11 @@ async function loadWeather(lat,lon){
   $("#wxTemp").textContent = temp==null? "--" : Math.round(temp);
   $("#wxCond").textContent = icon+" "+cond;
 
-  // ----- 高低溫 -----
   if(om && om.daily){
     $("#wxHi").textContent = Math.round(om.daily.temperature_2m_max[0]);
     $("#wxLo").textContent = Math.round(om.daily.temperature_2m_min[0]);
   }
 
-  // ----- 天文台警告 -----
   const wbox=$("#wxWarns"); wbox.innerHTML="";
   let hasRainWarn=false;
   if(hkoWarn && typeof hkoWarn==="object"){
@@ -557,7 +585,6 @@ async function loadWeather(lat,lon){
     wbox.appendChild(el("div","warn other",'<span class="dot"></span>警告資料暫時無法載入'));
   }
 
-  // ----- 逐小時 + 帶遮分析 + 預計降雨 -----
   let rainAt=null, maxProb=0;
   if(om && om.hourly){
     const H=om.hourly, now=new Date();
@@ -581,7 +608,6 @@ async function loadWeather(lat,lon){
     }
   }
 
-  // 帶遮建議
   const curPr = om && om.current ? om.current.precipitation : 0;
   let umbEmoji="🌂", umbBig="應該唔使帶遮", umbSmall="未來幾個鐘降雨機會低。";
   if(hasRainWarn || curPr>0.1){
@@ -600,7 +626,6 @@ async function loadWeather(lat,lon){
   }
   $("#umbSmall").textContent=umbSmall;
 
-  // ----- 未來幾日 -----
   if(om && om.daily){
     const D=om.daily, dbox=$("#wxDaily"); dbox.innerHTML="";
     const days=["日","一","二","三","四","五","六"];
@@ -643,7 +668,7 @@ async function refreshWx(){
   const btn=$("#wxRefresh"); btn.classList.add("spin");
   if(!COORDS){
     const loc=await getLocation();
-    COORDS = loc || {lat:22.391, lon:113.977, fallback:true}; // 預設屯門
+    COORDS = loc || {lat:22.391, lon:113.977, fallback:true};
   }
   try{
     await loadWeather(COORDS.lat, COORDS.lon);
@@ -652,6 +677,28 @@ async function refreshWx(){
     $("#wxErr").innerHTML='<div class="err">天氣資料載入失敗，請檢查網絡 / 位置權限後重試。</div>';
   }
   setTimeout(()=>btn.classList.remove("spin"),500);
+}
+
+/* =====================================================================
+   實時交通（Waze livemap embed）
+   ===================================================================== */
+let trafficLoaded=false, tZoom=14, tLat=22.391, tLon=113.977;
+function wazeSrc(){ return _H+"embed.waze.com/iframe?zoom="+tZoom+"&lat="+tLat+"&lon="+tLon+"&pin=1"; }
+function renderTraffic(){
+  const f=$("#wazeFrame"); if(f) f.src=wazeSrc();
+  const ext=$("#tOpenExt"); if(ext) ext.href=_H+"www.waze.com/ul?ll="+tLat+"%2C"+tLon+"&z="+tZoom;
+  $("#tUpd").textContent="更新於 "+nowStr();
+}
+async function loadTraffic(){
+  if(!COORDS){ const loc=await getLocation(); COORDS = loc || {lat:22.391, lon:113.977, fallback:true}; }
+  tLat=COORDS.lat; tLon=COORDS.lon;
+  renderTraffic();
+}
+{
+  const zi=$("#tZin"), zo=$("#tZout"), rc=$("#tRecenter");
+  if(zi) zi.addEventListener("click",()=>{ tZoom=Math.min(tZoom+1,17); renderTraffic(); });
+  if(zo) zo.addEventListener("click",()=>{ tZoom=Math.max(tZoom-1,9); renderTraffic(); });
+  if(rc) rc.addEventListener("click", async()=>{ COORDS=null; tZoom=14; await loadTraffic(); });
 }
 
 /* =====================================================================
@@ -664,18 +711,19 @@ document.querySelectorAll(".tab").forEach(t=>{
     t.classList.add("active");
     const tab=t.dataset.tab;
     $("#pageBus").classList.toggle("hidden", tab!=="bus");
+    $("#pageTraffic").classList.toggle("hidden", tab!=="traffic");
     $("#pageWx").classList.toggle("hidden", tab!=="wx");
     if(tab==="wx" && !wxLoaded){ wxLoaded=true; refreshWx(); }
+    if(tab==="traffic" && !trafficLoaded){ trafficLoaded=true; loadTraffic(); }
   });
 });
 $("#busRefresh").addEventListener("click", refreshBus);
 $("#wxRefresh").addEventListener("click", ()=>{ COORDS=null; refreshWx(); });
 
-// 自動刷新
 refreshBus();
 setInterval(()=>{ if(!$("#pageBus").classList.contains("hidden")) refreshBus(); }, 30000);
 setInterval(()=>{ if(!$("#pageWx").classList.contains("hidden")) refreshWx(); }, 600000);
-document.addEventListener("visibilitychange",()=>{ if(!document.hidden){ if(!$("#pageBus").classList.contains("hidden")) refreshBus(); else refreshWx(); }});
+document.addEventListener("visibilitychange",()=>{ if(!document.hidden){ if(!$("#pageBus").classList.contains("hidden")) refreshBus(); else if(!$("#pageWx").classList.contains("hidden")) refreshWx(); }});
 </script>
 </body>
 </html>
