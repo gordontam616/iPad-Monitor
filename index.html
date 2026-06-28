@@ -230,20 +230,27 @@
 
 <script>
 const _H="http"+"s://";
+/* =====================================================================
+   設定：巴士站 & 輕鐵站
+   ===================================================================== */
+// keyword = 站名關鍵字（會在九巴站名做模糊比對）
+// routes  = 若指定，只顯示呢啲路線（例如台山小學只顯示960）
 const BUS_STOPS = [
-  { label:"大興街",   keyword:"大興街",   routes:null },
-  { label:"大興總站", keyword:"大興",     routes:null, mustEnd:true },
+  { label:"大興街",   keyword:"大興街",   routes:["66M","66X","258D"] },
+  { label:"大興總站", keyword:"大興",     routes:["66M","66X"], mustEnd:true },
   { label:"台山小學", keyword:"台山",     routes:["960"] },
   { label:"翠林花園", keyword:"翠林",     routes:["A34"] },
 ];
+// 輕鐵 getSchedule station_id（屯門大興一帶）
 const LRT_STATIONS = [
-  { label:"蔡意橋",   id:280 },
-  { label:"大興（南）", id:240 },
+  { label:"蔡意橋",   id:280, routes:["507","751"] },
+  { label:"大興（南）", id:240, routes:["507","610"] },
 ];
 
 const KMB = _H+"data.etabus.gov.hk/v1/transport/kmb";
 const LRT = _H+"rt.data.gov.hk/v1/transport/mtr/lrt/getSchedule";
 
+/* ---------- helpers ---------- */
 const $ = s => document.querySelector(s);
 const el = (t,c,h)=>{const e=document.createElement(t); if(c)e.className=c; if(h!=null)e.innerHTML=h; return e;};
 function nowStr(){const d=new Date(); return d.toLocaleTimeString("zh-HK",{hour:"2-digit",minute:"2-digit",hour12:false});}
@@ -257,6 +264,9 @@ function etaText(mins){
   return {cls, html:`<span class="big ${cls}">${m}<span class="u">分</span></span>`};
 }
 
+/* =====================================================================
+   巴士 (KMB / LWB ETA API)
+   ===================================================================== */
 let STOP_CACHE = null;
 async function loadStopList(){
   if(STOP_CACHE) return STOP_CACHE;
@@ -306,6 +316,7 @@ async function renderBus(){
     const stops = findStops(cfg);
     if(!stops.length){ body.appendChild(el("div","empty","搵唔到呢個站")); continue; }
 
+    // 取所有匹配站的 stop-eta 再合併
     let etas=[];
     try{
       const res = await Promise.all(stops.map(s=> fetchJSON(`${KMB}/stop-eta/${s.stop}`).then(j=>j.data).catch(()=>[])));
@@ -316,14 +327,16 @@ async function renderBus(){
       const set = cfg.routes.map(r=>r.toUpperCase());
       etas = etas.filter(e=> set.includes((e.route||"").toUpperCase()));
     }
-    etas = etas.filter(e=> e.eta);
+    etas = etas.filter(e=> e.eta); // 只保留有班次
 
+    // group by route+dir+dest
     const groups={};
     for(const e of etas){
       const k = `${e.route}|${e.dir}|${e.dest_tc}`;
       (groups[k]=groups[k]||[]).push(e);
     }
     let keys = Object.keys(groups);
+    // 排序：用每組最早班次
     const firstMin = k=> Math.min(...groups[k].map(e=>minsFromNow(e.eta)).filter(v=>v!=null));
     keys.sort((a,b)=> (firstMin(a)) - (firstMin(b)) );
     keys.sort((a,b)=> a.split("|")[0].localeCompare(b.split("|")[0],"en",{numeric:true}) );
@@ -357,12 +370,16 @@ async function renderBus(){
   $("#busMeta").textContent = totalRoutes+" 條路線";
 }
 
-function lrtMins(t){
+/* =====================================================================
+   輕鐵 (MTR Light Rail real-time)
+   ===================================================================== */
+function lrtMins(t){ // "3 分鐘" / "-" / "即將抵達"
   if(!t) return null;
   if(/即將|抵達|arriving/i.test(t)) return 0;
   const m = t.match(/(\d+)/);
   return m? parseInt(m[1],10): null;
 }
+// 輕鐵站號自動校正：從 MTR 官方路線/站點資料比對站名（失敗則保留上面 hardcode 的 id）
 const LRT_CSV = _H+"opendata.mtr.com.hk/data/light_rail_routes_and_stops.csv";
 function normName(s){ return (s||"").replace(/[（）()\s]/g,""); }
 let lrtResolved=false;
@@ -383,7 +400,7 @@ async function resolveLrtIds(){
       const k=normName(st.label);
       if(map[k]!=null) st.id=map[k];
     }
-  }catch(e){}
+  }catch(e){ /* 保留 hardcode id */ }
 }
 async function renderLRT(){
   await resolveLrtIds();
@@ -400,10 +417,12 @@ async function renderLRT(){
     try{ data = await fetchJSON(`${LRT}?station_id=${st.id}`); }catch(e){}
     if(!data || data.status===0 || !data.platform_list){ body.appendChild(el("div","empty","暫時無班次資料")); continue; }
 
+    // 合併所有月台，按路線分組
     const groups={};
     for(const p of data.platform_list){
       for(const r of (p.route_list||[])){
         if(!r.route_no) continue;
+        if(st.routes && !st.routes.includes(String(r.route_no).toUpperCase())) continue;
         const k=`${r.route_no}|${r.dest_ch}`;
         (groups[k]=groups[k]||[]).push({...r, plat:p.platform_id});
       }
@@ -444,6 +463,10 @@ async function refreshBus(){
   setTimeout(()=>btn.classList.remove("spin"),500);
 }
 
+/* =====================================================================
+   天氣
+   ===================================================================== */
+// 部分天文台氣溫站坐標（用嚟揀最近站做地區名 + 官方氣溫）
 const HKO_STATIONS = [
   ["屯門",22.391,113.977],["天水圍",22.457,114.005],["元朗公園",22.443,114.027],
   ["流浮山",22.468,113.983],["石崗",22.435,114.085],["荃灣可觀",22.387,114.109],
@@ -481,9 +504,11 @@ function warnClass(code,name){
 
 async function loadWeather(lat,lon){
   $("#wxErr").innerHTML="";
+  // 地區名 + 官方氣溫
   const st = nearestStation(lat,lon);
   $("#wxLoc").textContent = st? st[0] : "我的位置";
 
+  // Open-Meteo（逐小時降雨）
   const omURL = `${_H}api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}`+
     `&current=temperature_2m,weather_code,precipitation`+
     `&hourly=temperature_2m,precipitation_probability,precipitation,weather_code`+
@@ -496,6 +521,7 @@ async function loadWeather(lat,lon){
     fetchJSON(_H+"data.weather.gov.hk/weatherAPI/opendata/weather.php?dataType=warnsum&lang=tc").catch(()=>null)
   ]);
 
+  // ----- 氣溫（優先用天文台最近站，否則 Open-Meteo current）-----
   let temp=null, cond="—", icon="🌡️";
   if(hkoCur && hkoCur.temperature && hkoCur.temperature.data){
     const match = hkoCur.temperature.data.find(d=> st && d.place===st[0]);
@@ -508,11 +534,13 @@ async function loadWeather(lat,lon){
   $("#wxTemp").textContent = temp==null? "--" : Math.round(temp);
   $("#wxCond").textContent = icon+" "+cond;
 
+  // ----- 高低溫 -----
   if(om && om.daily){
     $("#wxHi").textContent = Math.round(om.daily.temperature_2m_max[0]);
     $("#wxLo").textContent = Math.round(om.daily.temperature_2m_min[0]);
   }
 
+  // ----- 天文台警告 -----
   const wbox=$("#wxWarns"); wbox.innerHTML="";
   let hasRainWarn=false;
   if(hkoWarn && typeof hkoWarn==="object"){
@@ -528,6 +556,7 @@ async function loadWeather(lat,lon){
     wbox.appendChild(el("div","warn other",'<span class="dot"></span>警告資料暫時無法載入'));
   }
 
+  // ----- 逐小時 + 帶遮分析 + 預計降雨 -----
   let rainAt=null, maxProb=0;
   if(om && om.hourly){
     const H=om.hourly, now=new Date();
@@ -551,6 +580,7 @@ async function loadWeather(lat,lon){
     }
   }
 
+  // 帶遮建議
   const curPr = om && om.current ? om.current.precipitation : 0;
   let umbEmoji="🌂", umbBig="應該唔使帶遮", umbSmall="未來幾個鐘降雨機會低。";
   if(hasRainWarn || curPr>0.1){
@@ -569,6 +599,7 @@ async function loadWeather(lat,lon){
   }
   $("#umbSmall").textContent=umbSmall;
 
+  // ----- 未來幾日 -----
   if(om && om.daily){
     const D=om.daily, dbox=$("#wxDaily"); dbox.innerHTML="";
     const days=["日","一","二","三","四","五","六"];
@@ -611,7 +642,7 @@ async function refreshWx(){
   const btn=$("#wxRefresh"); btn.classList.add("spin");
   if(!COORDS){
     const loc=await getLocation();
-    COORDS = loc || {lat:22.391, lon:113.977, fallback:true};
+    COORDS = loc || {lat:22.391, lon:113.977, fallback:true}; // 預設屯門
   }
   try{
     await loadWeather(COORDS.lat, COORDS.lon);
@@ -622,6 +653,9 @@ async function refreshWx(){
   setTimeout(()=>btn.classList.remove("spin"),500);
 }
 
+/* =====================================================================
+   分頁 & 啟動
+   ===================================================================== */
 let wxLoaded=false;
 document.querySelectorAll(".tab").forEach(t=>{
   t.addEventListener("click",()=>{
@@ -636,6 +670,7 @@ document.querySelectorAll(".tab").forEach(t=>{
 $("#busRefresh").addEventListener("click", refreshBus);
 $("#wxRefresh").addEventListener("click", ()=>{ COORDS=null; refreshWx(); });
 
+// 自動刷新
 refreshBus();
 setInterval(()=>{ if(!$("#pageBus").classList.contains("hidden")) refreshBus(); }, 30000);
 setInterval(()=>{ if(!$("#pageWx").classList.contains("hidden")) refreshWx(); }, 600000);
