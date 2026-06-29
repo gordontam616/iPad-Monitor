@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-<title>Next Bus HK · 天水圍到站 & 交通 & 天氣</title>
+<title>Next Bus HK · 屯門到站 & 交通 & 天氣</title>
 <style>
   :root{
     --bg:#0b0d10; --bg2:#14181d; --card:#1b2026; --card2:#232a32;
@@ -201,9 +201,9 @@
   <section id="pageBus" class="page">
     <div class="phead">
       <div>
-        <div class="eyebrow">天水圍到站顯示屏</div>
+        <div class="eyebrow">屯門到站顯示屏</div>
         <h1>Next Bus HK</h1>
-        <div class="sub">Bus &amp; Light Rail ETA · 天水圍</div>
+        <div class="sub">Bus &amp; Light Rail ETA · 屯門</div>
       </div>
       <div>
         <div class="upd" id="busUpd">更新中…</div>
@@ -331,14 +331,16 @@ const _H="http"+"s://";
 const GKEY="AIzaSyDLnw4OwEZ9si26wTbW6COfr7tDUXptdmM";
 
 const BUS_STOPS = [
-  { label:"天逸邨逸潭樓", keyword:"逸潭樓" },
-  { label:"天恒邨總站",   keyword:"天恒", mustEnd:true },
-  { label:"天澤邨",       keyword:"天澤" },
+  { label:"大興街",   keyword:"大興街", routes:["66M","66X","258D"] },
+  { label:"大興總站", keyword:"大興", routes:["66M","66X"], mustEnd:true, destFilter:{ "66M":"荃灣", "66X":"奧運" } },
+  { label:"台山小學", keyword:"台山", routes:["960"] },
+  { label:"翠林花園", keyword:"翠林", routes:["A34"] },
 ];
 const LRT_STATIONS = [
-  { label:"天逸", id:null },
+  { label:"蔡意橋",   id:75,  routes:["507","751"] },
+  { label:"大興（南）", id:220, routes:["507","610"] },
 ];
-const FALLBACK = { lat:22.4675, lon:114.0030 };
+const FALLBACK = { lat:22.3910, lon:113.9770 }; // 屯門
 
 const KMB = _H+"data.etabus.gov.hk/v1/transport/kmb";
 const LRT = _H+"rt.data.gov.hk/v1/transport/mtr/lrt/getSchedule";
@@ -384,6 +386,7 @@ async function renderBus(){
     let etas=[];
     try{ const res=await Promise.all(stops.map(s=> fetchJSON(`${KMB}/stop-eta/${s.stop}`).then(j=>j.data).catch(()=>[]))); etas=res.flat(); }catch(e){}
     if(cfg.routes){ const set=cfg.routes.map(r=>r.toUpperCase()); etas=etas.filter(e=> set.includes((e.route||"").toUpperCase())); }
+    if(cfg.destFilter){ etas=etas.filter(e=>{ const df=cfg.destFilter[(e.route||"").toUpperCase()]; if(!df) return true; return (e.dest_tc||"").includes(df); }); }
     etas=etas.filter(e=> e.eta);
     const groups={};
     for(const e of etas){ const k=`${e.route}|${e.dir}|${e.dest_tc}`; (groups[k]=groups[k]||[]).push(e); }
@@ -729,7 +732,7 @@ function getLocation(){ return new Promise(res=>{ if(!navigator.geolocation){ re
 async function refreshWx(){
   const btn=$("#wxRefresh"); btn.classList.add("spin");
   if(!COORDS){ const loc=await getLocation(); COORDS=loc||{lat:FALLBACK.lat,lon:FALLBACK.lon,fallback:true}; }
-  try{ await loadWeather(COORDS.lat,COORDS.lon); if(COORDS.fallback){ $("#wxLoc").textContent+="（預設天水圍）"; } }
+  try{ await loadWeather(COORDS.lat,COORDS.lon); if(COORDS.fallback){ $("#wxLoc").textContent+="（預設屯門）"; } }
   catch(e){ $("#wxErr").innerHTML='<div class="err">天氣資料載入失敗，請檢查網絡 / 位置權限後重試。</div>'; }
   setTimeout(()=>btn.classList.remove("spin"),500);
 }
