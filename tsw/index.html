@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<title>Next Bus HK · 天水圍到站 & 交通 & 天氣</title>
+<style>
+  :root{
+    --bg:#0b0d10; --bg2:#14181d; --card:#1b2026; --card2:#232a32;
+    --line:#2a323b; --txt:#f4f6f8; --sub:#9aa6b2; --dim:#6b7682;
+    --accent:#3ea6ff; --red:#ff5a5f; --amber:#ffb020; --green:#34c759;
+    --rain:#4fb0ff;
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bot: env(safe-area-inset-bottom, 0px);
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;height:100%;}
+  body{
+    background:var(--bg); color:var(--txt);
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang HK","Microsoft JhengHei","Helvetica Neue",Arial,sans-serif;
+    font-size:16px; line-height:1.4; overflow:hidden;
+  }
+  .app{height:100vh; height:100dvh; display:flex; flex-direction:column;}
+  .page{flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:calc(var(--safe-top) + 14px) 14px 90px;}
+  .page.hidden{display:none;}
+
+  .phead{display:flex; align-items:baseline; justify-content:space-between; margin-bottom:14px;}
+  .phead .eyebrow{font-size:11px; letter-spacing:.22em; color:var(--dim); text-transform:uppercase;}
+  .phead h1{font-size:26px; font-weight:800; margin:2px 0 0; letter-spacing:-.5px;}
+  .phead .sub{font-size:12px; color:var(--sub);}
+  .upd{font-size:11px; color:var(--dim); text-align:right; white-space:nowrap;}
+  .refresh{margin-top:6px; display:inline-flex; gap:6px; align-items:center; background:var(--card2);
+    border:1px solid var(--line); color:var(--sub); border-radius:20px; padding:6px 12px; font-size:12px; cursor:pointer;}
+  .refresh:active{transform:scale(.96);}
+  .refresh.spin svg{animation:spin 1s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+
+  .seg{display:inline-flex; background:var(--card2); border:1px solid var(--line); border-radius:12px; padding:3px; gap:3px; margin-bottom:14px;}
+  .seg-btn{appearance:none; -webkit-appearance:none; border:0; background:transparent; color:var(--sub); font-size:14px; font-weight:700; padding:8px 18px; border-radius:9px; cursor:pointer; font-family:inherit;}
+  .seg-btn.active{background:var(--accent); color:#04121f;}
+  .grp.hidden{display:none;}
+
+  .grp{margin-bottom:18px;}
+  .grp-h{display:flex; align-items:center; gap:8px; margin:0 2px 8px;}
+  .grp-h .ic{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;font-size:14px;}
+  .grp-h .bus{background:rgba(62,166,255,.16); color:var(--accent);}
+  .grp-h .lrt{background:rgba(255,176,32,.16); color:var(--amber);}
+  .grp-h h2{font-size:15px; font-weight:700; margin:0;}
+  .grp-h .meta{font-size:11px; color:var(--dim); margin-left:auto;}
+
+  .stop{background:var(--card); border:1px solid var(--line); border-radius:16px; overflow:hidden; margin-bottom:12px;}
+  .stop-h{display:flex; align-items:center; gap:8px; padding:11px 14px; background:var(--card2); border-bottom:1px solid var(--line);}
+  .stop-h .name{font-size:14px; font-weight:700;}
+  .stop-h .tag{font-size:10px; color:var(--dim); background:rgba(255,255,255,.05); border:1px solid var(--line); padding:2px 7px; border-radius:10px;}
+  .stop-h .pin{margin-left:auto; font-size:11px; color:var(--dim);}
+
+  .row{display:flex; align-items:center; gap:12px; padding:12px 14px; border-bottom:1px solid var(--line); cursor:pointer; transition:background .15s;}
+  .row:last-child{border-bottom:none;}
+  .row:active{background:rgba(255,255,255,.04);}
+  .route{min-width:60px; font-size:22px; font-weight:800; letter-spacing:-.5px;}
+  .route.lrtno{color:var(--amber);}
+  .dest{flex:1; min-width:0;}
+  .dest .d1{font-size:14px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .dest .d2{font-size:11px; color:var(--dim); margin-top:2px;}
+  .eta{text-align:right; min-width:70px;}
+  .eta .big{font-size:22px; font-weight:800; line-height:1;}
+  .eta .big .u{font-size:12px; font-weight:600; color:var(--sub); margin-left:2px;}
+  .eta .soon{color:var(--green);}
+  .eta .now{color:var(--red);}
+  .eta .none{font-size:13px; color:var(--dim); font-weight:600;}
+  .chev{width:14px; color:var(--dim); font-size:12px; transition:transform .2s; text-align:center;}
+  .row.open .chev{transform:rotate(90deg);}
+  .detail{display:none; padding:0 14px 12px 86px; background:rgba(0,0,0,.18);}
+  .row.open + .detail{display:block;}
+  .detail .line{display:flex; justify-content:space-between; padding:7px 0; font-size:13px; color:var(--sub); border-top:1px dashed var(--line);}
+  .detail .line:first-child{border-top:none;}
+  .detail .line .t{font-weight:700; color:var(--txt);}
+  .detail .rmk{color:var(--amber);}
+  .amber{color:var(--amber);}
+  .empty{padding:16px 14px; font-size:13px; color:var(--dim); text-align:center;}
+  .err{padding:14px; font-size:12.5px; color:var(--red); background:rgba(255,90,95,.08); border:1px solid rgba(255,90,95,.25); border-radius:12px; margin-bottom:12px;}
+  .center-note{text-align:center; color:var(--dim); font-size:12.5px; padding:8px;}
+  a.link{color:var(--accent); text-decoration:none;}
+
+  #pageTraffic{padding:calc(var(--safe-top) + 12px) 12px 90px;}
+  .search-card{background:var(--card); border:1px solid var(--line); border-radius:16px; padding:14px; margin-bottom:12px;}
+  .search-card h2{font-size:16px; font-weight:800; margin:0 0 12px; display:flex; align-items:center; gap:7px;}
+  .field{margin-bottom:10px;}
+  .field label{display:block; font-size:11px; color:var(--dim); letter-spacing:.04em; text-transform:uppercase; margin-bottom:5px;}
+  .inrow{display:flex; gap:8px;}
+  .inp{flex:1; min-width:0; background:var(--card2); border:1px solid var(--line); color:var(--txt); border-radius:10px; padding:11px 12px; font-size:14px; font-family:inherit;}
+  .inp::placeholder{color:var(--dim);}
+  .ibtn{flex:0 0 auto; background:var(--card2); border:1px solid var(--line); color:var(--accent); border-radius:10px; padding:0 12px; font-size:13px; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:5px;}
+  .ibtn:active{transform:scale(.96);}
+  .ibtn.on{background:var(--accent); color:#04121f; border-color:var(--accent);}
+  .chips{display:flex; flex-wrap:wrap; gap:7px; margin-top:8px;}
+  .chip{display:inline-flex; align-items:center; gap:6px; background:var(--card2); border:1px solid var(--line); color:var(--txt); border-radius:18px; padding:6px 12px; font-size:13px; cursor:pointer;}
+  .chip .x{color:var(--dim); font-size:14px; padding:0 2px;}
+  .chip.add{color:var(--accent); border-style:dashed;}
+  .timeseg{display:flex; gap:6px; background:var(--card2); border:1px solid var(--line); border-radius:10px; padding:3px;}
+  .timeseg button{flex:1; appearance:none; border:0; background:transparent; color:var(--sub); font-size:13px; font-weight:700; padding:8px 4px; border-radius:8px; cursor:pointer; font-family:inherit;}
+  .timeseg button.active{background:var(--accent); color:#04121f;}
+  .timeinput{margin-top:8px;}
+  .gobtn{width:100%; margin-top:4px; background:var(--accent); color:#04121f; border:0; border-radius:12px; padding:13px; font-size:15px; font-weight:800; cursor:pointer; font-family:inherit;}
+  .gobtn:active{transform:scale(.99);}
+  .gobtn:disabled{opacity:.5;}
+
+  .results{margin-top:4px;}
+  .rcard{background:var(--card); border:1px solid var(--line); border-radius:14px; padding:13px 14px; margin-bottom:10px; cursor:pointer; transition:background .15s;}
+  .rcard:active{background:var(--card2);}
+  .rcard .rtop{display:flex; align-items:baseline; justify-content:space-between; gap:10px;}
+  .rcard .rdur{font-size:21px; font-weight:800;}
+  .rcard .rtime{font-size:12px; color:var(--sub); white-space:nowrap;}
+  .rcard .rmodes{display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-top:9px;}
+  .pill{display:inline-flex; align-items:center; gap:4px; background:var(--card2); border:1px solid var(--line); border-radius:8px; padding:4px 8px; font-size:12px; font-weight:700;}
+  .pill.walk{color:var(--sub);}
+  .pill.bus{color:var(--accent);}
+  .pill.rail{color:var(--amber);}
+  .arrow{color:var(--dim); font-size:11px;}
+  .rcard .rsub{font-size:11.5px; color:var(--dim); margin-top:7px;}
+
+  .map-box{height:230px; border-radius:14px; overflow:hidden; border:1px solid var(--line); margin-bottom:12px; background:var(--bg2);}
+  #liveMap, #detailMap{width:100%; height:100%;}
+  .cond{display:flex; align-items:center; gap:10px; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:11px 13px; margin-bottom:12px;}
+  .cond .dot{width:12px;height:12px;border-radius:50%; flex:0 0 auto;}
+  .cond .ct{font-size:14px; font-weight:700;}
+  .cond .cs{font-size:11.5px; color:var(--sub); margin-top:1px;}
+  .back{display:inline-flex; align-items:center; gap:6px; color:var(--accent); font-size:14px; font-weight:700; cursor:pointer; margin-bottom:10px;}
+
+  .steps{position:relative;}
+  .step{display:flex; gap:11px; padding:2px 0;}
+  .step .stbar{display:flex; flex-direction:column; align-items:center; width:26px; flex:0 0 auto;}
+  .step .stic{width:26px;height:26px;border-radius:50%; display:grid; place-items:center; font-size:13px; background:var(--card2); border:1px solid var(--line);}
+  .step .stline{flex:1; width:2px; background:var(--line); margin:2px 0;}
+  .step:last-child .stline{display:none;}
+  .step .stbody{flex:1; padding-bottom:16px; min-width:0;}
+  .step .s1{font-size:14px; font-weight:700;}
+  .step .s2{font-size:12px; color:var(--sub); margin-top:2px;}
+  .step .s3{font-size:11.5px; color:var(--dim); margin-top:2px;}
+  .step.transit .stic{background:rgba(62,166,255,.16); color:var(--accent); border-color:transparent;}
+  .step.rail .stic{background:rgba(255,176,32,.16); color:var(--amber); border-color:transparent;}
+
+  .wx-hero{text-align:center; padding:20px 10px 6px;}
+  .wx-loc{font-size:20px; font-weight:700; display:flex; gap:6px; justify-content:center; align-items:center;}
+  .wx-loc .arrow{font-size:13px; color:var(--sub);}
+  .wx-temp{font-size:84px; font-weight:200; line-height:1; margin:2px 0; letter-spacing:-2px;}
+  .wx-cond{font-size:17px; color:var(--sub); font-weight:500;}
+  .wx-hl{font-size:15px; color:var(--txt); margin-top:2px;}
+  .wx-hl .l{color:var(--sub);}
+  .wx-src{font-size:10px; color:var(--dim); margin-top:6px;}
+  .warns{display:flex; flex-wrap:wrap; gap:8px; margin:12px 0;}
+  .warn{display:flex; align-items:center; gap:7px; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:8px 12px; font-size:13px; font-weight:600;}
+  .warn .dot{width:9px;height:9px;border-radius:50%;}
+  .warn.rain .dot{background:var(--rain);} .warn.ts .dot{background:var(--amber);}
+  .warn.hot .dot{background:var(--red);} .warn.cold .dot{background:var(--accent);}
+  .warn.wind .dot{background:var(--green);} .warn.other .dot{background:var(--sub);}
+  .wcard{background:var(--card); border:1px solid var(--line); border-radius:16px; padding:14px; margin-bottom:12px;}
+  .wcard .lab{font-size:11px; letter-spacing:.04em; color:var(--dim); text-transform:uppercase; display:flex; align-items:center; gap:6px; margin-bottom:8px;}
+  .umb{display:flex; align-items:center; gap:14px;}
+  .umb .emoji{font-size:38px;}
+  .umb .txt .big{font-size:19px; font-weight:800;}
+  .umb .txt .small{font-size:12.5px; color:var(--sub); margin-top:2px;}
+  .hourly{display:flex; gap:2px; overflow-x:auto; padding-bottom:4px; -webkit-overflow-scrolling:touch;}
+  .hour{flex:0 0 auto; width:56px; text-align:center; padding:6px 2px;}
+  .hour .h{font-size:12px; color:var(--sub); font-weight:600;}
+  .hour .ic{font-size:20px; margin:6px 0 4px;}
+  .hour .p{font-size:11px; color:var(--rain); font-weight:700; min-height:14px;}
+  .hour .t{font-size:13px; font-weight:700; margin-top:2px;}
+  .hour.nowmark{background:rgba(62,166,255,.10); border-radius:12px;}
+  .daily .day{display:flex; align-items:center; gap:12px; padding:9px 0; border-top:1px solid var(--line); font-size:14px;}
+  .daily .day:first-child{border-top:none;}
+  .daily .day .dn{width:42px; font-weight:600;}
+  .daily .day .di{width:26px; text-align:center; font-size:17px;}
+  .daily .day .dp{width:42px; font-size:11px; color:var(--rain); font-weight:700;}
+  .daily .day .lo{width:34px; text-align:right; color:var(--sub);}
+  .daily .day .bar{flex:1; height:4px; border-radius:3px; background:var(--line); position:relative; overflow:hidden;}
+  .daily .day .bar i{position:absolute; height:100%; border-radius:3px; background:linear-gradient(90deg,#5ac8fa,#ffb020,#ff8a3d);}
+  .daily .day .hi{width:34px; font-weight:700;}
+
+  .tabs{position:fixed; left:0; right:0; bottom:0; display:flex; background:rgba(16,19,23,.92);
+    backdrop-filter:saturate(150%) blur(18px); -webkit-backdrop-filter:saturate(150%) blur(18px);
+    border-top:1px solid var(--line); padding:8px 10px calc(8px + var(--safe-bot));}
+  .tab{flex:1; display:flex; flex-direction:column; align-items:center; gap:3px; padding:6px; color:var(--dim); cursor:pointer;}
+  .tab .ti{font-size:21px;}
+  .tab .tl{font-size:11px; font-weight:600;}
+  .tab.active{color:var(--accent);}
+
+  .pac-container{background:#1b2026; border:1px solid #2a323b; border-radius:10px; margin-top:4px; box-shadow:0 8px 24px rgba(0,0,0,.5); font-family:inherit; z-index:9999;}
+  .pac-item{color:#9aa6b2; border-top:1px solid #2a323b; padding:6px 10px; font-size:13px;}
+  .pac-item:hover{background:#232a32;}
+  .pac-item-query{color:#f4f6f8;}
+  .pac-matched{color:#3ea6ff;}
+  .pac-icon{display:none;}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <section id="pageBus" class="page">
+    <div class="phead">
+      <div>
+        <div class="eyebrow">天水圍到站顯示屏</div>
+        <h1>Next Bus HK</h1>
+        <div class="sub">Bus &amp; Light Rail ETA · 天水圍</div>
+      </div>
+      <div>
+        <div class="upd" id="busUpd">更新中…</div>
+        <div class="refresh" id="busRefresh">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+          重新整理
+        </div>
+      </div>
+    </div>
+    <div id="busErr"></div>
+
+    <div class="seg" id="modeSeg">
+      <button class="seg-btn active" data-mode="bus">🚌 巴士</button>
+      <button class="seg-btn" data-mode="lrt">🚈 輕鐵</button>
+    </div>
+
+    <div class="grp" id="grpBus">
+      <div class="grp-h"><div class="ic bus">🚌</div><h2>巴士到站</h2><span class="meta" id="busMeta"></span></div>
+      <div id="busStops"></div>
+    </div>
+
+    <div class="grp hidden" id="grpLrt">
+      <div class="grp-h"><div class="ic lrt">🚈</div><h2>輕鐵到站</h2><span class="meta" id="lrtMeta"></span></div>
+      <div id="lrtStops"></div>
+    </div>
+
+    <div class="center-note">點擊任何路線可展開該線「後兩班」到站時間</div>
+  </section>
+
+  <section id="pageTraffic" class="page hidden">
+    <div id="tfSearchView">
+      <div class="search-card">
+        <h2>🧭 我要去邊度</h2>
+        <div class="field">
+          <label>起點</label>
+          <div class="inrow">
+            <input class="inp" id="origInput" placeholder="輸入起點地址" autocomplete="off">
+            <button class="ibtn" id="origLocBtn">📍 實時位置</button>
+          </div>
+        </div>
+        <div class="field">
+          <label>目的地</label>
+          <div class="inrow">
+            <input class="inp" id="destInput" placeholder="輸入目的地地址" autocomplete="off">
+            <button class="ibtn" id="saveDestBtn">＋ 儲存</button>
+          </div>
+          <div class="chips" id="saveChips"></div>
+        </div>
+        <div class="field">
+          <label>出發時間</label>
+          <div class="timeseg" id="timeSeg">
+            <button data-tm="now" class="active">現在</button>
+            <button data-tm="depart">出發時間</button>
+            <button data-tm="arrive">到達時間</button>
+          </div>
+          <input type="time" class="inp timeinput hidden" id="timeInput">
+        </div>
+        <button class="gobtn" id="goBtn">搜尋路線</button>
+      </div>
+
+      <div id="tfErr"></div>
+      <div class="results" id="results"></div>
+
+      <div class="map-box"><div id="liveMap"></div></div>
+      <div class="center-note" id="liveMapNote">即時路況地圖 · 綠=暢通 橙=緩慢 紅=擠塞</div>
+    </div>
+
+    <div id="tfDetailView" class="hidden">
+      <div class="back" id="detailBack">‹ 返回路線列表</div>
+      <div class="map-box"><div id="detailMap"></div></div>
+      <div class="cond" id="detailCond"></div>
+      <div class="steps" id="detailSteps"></div>
+    </div>
+  </section>
+
+  <section id="pageWx" class="page hidden">
+    <div class="phead">
+      <div>
+        <div class="eyebrow">地區天氣</div>
+        <h1>天氣</h1>
+      </div>
+      <div>
+        <div class="upd" id="wxUpd">更新中…</div>
+        <div class="refresh" id="wxRefresh">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+          重新整理
+        </div>
+      </div>
+    </div>
+    <div id="wxErr"></div>
+    <div class="wx-hero">
+      <div class="wx-loc"><span class="arrow">➤</span><span id="wxLoc">定位中…</span></div>
+      <div class="wx-temp"><span id="wxTemp">--</span><span class="deg">°</span></div>
+      <div class="wx-cond" id="wxCond">—</div>
+      <div class="wx-hl">最高 <span id="wxHi">--</span>°　<span class="l">最低 <span id="wxLo">--</span>°</span></div>
+      <div class="wx-src">資料：香港天文台 · Open-Meteo</div>
+    </div>
+    <div class="warns" id="wxWarns"></div>
+    <div class="wcard">
+      <div class="lab">☂️ 使唔使帶遮</div>
+      <div class="umb">
+        <div class="emoji" id="umbEmoji">☂️</div>
+        <div class="txt"><div class="big" id="umbBig">分析中…</div><div class="small" id="umbSmall"></div></div>
+      </div>
+    </div>
+    <div class="wcard">
+      <div class="lab">🌧️ 預計降雨 · 未來逐小時</div>
+      <div class="hourly" id="wxHourly"></div>
+    </div>
+    <div class="wcard daily">
+      <div class="lab">📅 未來幾日</div>
+      <div id="wxDaily"></div>
+    </div>
+  </section>
+
+  <nav class="tabs">
+    <div class="tab active" data-tab="bus"><div class="ti">🚍</div><div class="tl">到站時間</div></div>
+    <div class="tab" data-tab="traffic"><div class="ti">🚦</div><div class="tl">實時交通</div></div>
+    <div class="tab" data-tab="wx"><div class="ti">⛅</div><div class="tl">地區天氣</div></div>
+  </nav>
+</div>
+
+<script>
+const _H="http"+"s://";
+const GKEY="AIzaSyDLnw4OwEZ9si26wTbW6COfr7tDUXptdmM";
+
+const BUS_STOPS = [
+  { label:"天逸邨逸潭樓", keyword:"逸潭樓" },
+  { label:"天恒邨總站",   keyword:"天恒", mustEnd:true },
+  { label:"天澤邨",       keyword:"天澤" },
+];
+const LRT_STATIONS = [
+  { label:"天逸", id:null },
+];
+const FALLBACK = { lat:22.4675, lon:114.0030 };
+
+const KMB = _H+"data.etabus.gov.hk/v1/transport/kmb";
+const LRT = _H+"rt.data.gov.hk/v1/transport/mtr/lrt/getSchedule";
+
+const $ = s => document.querySelector(s);
+const el = (t,c,h)=>{const e=document.createElement(t); if(c)e.className=c; if(h!=null)e.innerHTML=h; return e;};
+function nowStr(){return new Date().toLocaleTimeString("zh-HK",{hour:"2-digit",minute:"2-digit",hour12:false});}
+function fetchJSON(u){return fetch(u,{cache:"no-store"}).then(r=>{if(!r.ok)throw new Error(r.status);return r.json();});}
+function minsFromNow(iso){ if(!iso) return null; return (new Date(iso)-new Date())/60000; }
+function etaText(mins){
+  if(mins==null) return {html:"—"};
+  const m=Math.round(mins);
+  if(m<=0) return {html:'<span class="big now">到站</span>'};
+  const cls = m<=3 ? "soon" : "";
+  return {html:`<span class="big ${cls}">${m}<span class="u">分</span></span>`};
+}
+
+let STOP_CACHE=null;
+async function loadStopList(){
+  if(STOP_CACHE) return STOP_CACHE;
+  try{ const raw=localStorage.getItem("kmbStops"); if(raw){const o=JSON.parse(raw); if(Date.now()-o.t<86400000){STOP_CACHE=o.d; return STOP_CACHE;}} }catch(e){}
+  const j=await fetchJSON(`${KMB}/stop`); STOP_CACHE=j.data;
+  try{ localStorage.setItem("kmbStops", JSON.stringify({t:Date.now(),d:STOP_CACHE})); }catch(e){}
+  return STOP_CACHE;
+}
+function findStops(cfg){
+  const list=STOP_CACHE.filter(s=> s.name_tc && s.name_tc.includes(cfg.keyword));
+  if(cfg.mustEnd){ const t=list.filter(s=> /總站|總$/.test(s.name_tc)); if(t.length) return t; }
+  return list;
+}
+async function renderBus(){
+  const wrap=$("#busStops");
+  try{ await loadStopList(); }catch(e){ $("#busErr").innerHTML='<div class="err">巴士站資料載入失敗，請檢查網絡後重試。</div>'; return; }
+  $("#busErr").innerHTML=""; wrap.innerHTML=""; let total=0;
+  for(const cfg of BUS_STOPS){
+    const card=el("div","stop"); const head=el("div","stop-h");
+    head.appendChild(el("span","name",cfg.label));
+    if(cfg.routes) head.appendChild(el("span","tag","只顯示 "+cfg.routes.join("/")));
+    head.appendChild(el("span","pin","九巴 KMB")); card.appendChild(head);
+    const body=el("div"); card.appendChild(body); wrap.appendChild(card);
+    const stops=findStops(cfg);
+    if(!stops.length){ body.appendChild(el("div","empty","搵唔到呢個站")); continue; }
+    let etas=[];
+    try{ const res=await Promise.all(stops.map(s=> fetchJSON(`${KMB}/stop-eta/${s.stop}`).then(j=>j.data).catch(()=>[]))); etas=res.flat(); }catch(e){}
+    if(cfg.routes){ const set=cfg.routes.map(r=>r.toUpperCase()); etas=etas.filter(e=> set.includes((e.route||"").toUpperCase())); }
+    etas=etas.filter(e=> e.eta);
+    const groups={};
+    for(const e of etas){ const k=`${e.route}|${e.dir}|${e.dest_tc}`; (groups[k]=groups[k]||[]).push(e); }
+    let keys=Object.keys(groups);
+    const firstMin=k=> Math.min(...groups[k].map(e=>minsFromNow(e.eta)).filter(v=>v!=null));
+    keys.sort((a,b)=> firstMin(a)-firstMin(b));
+    keys.sort((a,b)=> a.split("|")[0].localeCompare(b.split("|")[0],"en",{numeric:true}));
+    if(!keys.length){ body.appendChild(el("div","empty","暫時無班次資料")); continue; }
+    for(const k of keys){
+      total++;
+      const arr=groups[k].sort((a,b)=>(a.eta_seq||0)-(b.eta_seq||0));
+      const f=arr[0]; const et=etaText(minsFromNow(f.eta));
+      const row=el("div","row");
+      row.innerHTML=`<div class="route">${f.route}</div>
+        <div class="dest"><div class="d1">${f.dest_tc||""}</div><div class="d2">${f.rmk_tc?('<span class=amber>'+f.rmk_tc+'</span>'):'往 '+(f.dest_tc||'')}</div></div>
+        <div class="eta">${et.html}</div><div class="chev">▶</div>`;
+      const detail=el("div","detail");
+      detail.innerHTML=arr.slice(0,2).map((e,i)=>{
+        const m=minsFromNow(e.eta); const tt=m==null?"—":(Math.round(m)<=0?"到站":Math.round(m)+" 分鐘");
+        const clock=e.eta? new Date(e.eta).toLocaleTimeString("zh-HK",{hour:"2-digit",minute:"2-digit",hour12:false}):"--:--";
+        return `<div class="line"><span>第 ${i+1} 班 · ${clock}</span><span class="t">${tt}</span></div>`+(e.rmk_tc?`<div class="line rmk"><span>${e.rmk_tc}</span><span></span></div>`:"");
+      }).join("")||'<div class="line"><span>暫無下一班資料</span><span></span></div>';
+      row.addEventListener("click",()=> row.classList.toggle("open"));
+      body.appendChild(row); body.appendChild(detail);
+    }
+  }
+  $("#busMeta").textContent=total+" 條路線";
+}
+
+function lrtMins(t){ if(!t) return null; if(/即將|抵達|arriving/i.test(t)) return 0; const m=t.match(/(\d+)/); return m?parseInt(m[1],10):null; }
+const LRT_CSV=_H+"opendata.mtr.com.hk/data/light_rail_routes_and_stops.csv";
+function normName(s){ return (s||"").replace(/[（）()\s]/g,""); }
+let lrtResolved=false;
+async function resolveLrtIds(){
+  if(lrtResolved) return; lrtResolved=true;
+  try{
+    const txt=await fetch(LRT_CSV,{cache:"force-cache"}).then(r=>{if(!r.ok)throw 0;return r.text();});
+    const rows=txt.split(/\r?\n/).slice(1); const map={};
+    for(const r of rows){ const c=r.split(","); if(c.length<5) continue; const id=parseInt(c[3],10); const cn=normName(c[4]); if(cn && !isNaN(id) && map[cn]==null) map[cn]=id; }
+    for(const st of LRT_STATIONS){ if(st.id!=null) continue; const k=normName(st.label); if(map[k]!=null) st.id=map[k]; }
+  }catch(e){}
+}
+async function renderLRT(){
+  await resolveLrtIds();
+  const wrap=$("#lrtStops"); wrap.innerHTML=""; let cnt=0;
+  for(const st of LRT_STATIONS){
+    const card=el("div","stop"); const head=el("div","stop-h");
+    head.appendChild(el("span","name",st.label)); head.appendChild(el("span","pin","輕鐵 LR"));
+    card.appendChild(head); const body=el("div"); card.appendChild(body); wrap.appendChild(card);
+    if(st.id==null){ body.appendChild(el("div","empty","無法解析車站編號")); continue; }
+    let data=null; try{ data=await fetchJSON(`${LRT}?station_id=${st.id}`); }catch(e){}
+    if(!data||data.status===0||!data.platform_list){ body.appendChild(el("div","empty","暫時無班次資料")); continue; }
+    const groups={};
+    for(const p of data.platform_list){ for(const r of (p.route_list||[])){ if(!r.route_no) continue; if(st.routes && !st.routes.includes(String(r.route_no).toUpperCase())) continue; const k=`${r.route_no}|${r.dest_ch}`; (groups[k]=groups[k]||[]).push({...r, plat:p.platform_id}); } }
+    let keys=Object.keys(groups);
+    if(!keys.length){ body.appendChild(el("div","empty","暫時無班次資料")); continue; }
+    keys.sort((a,b)=> a.split("|")[0].localeCompare(b.split("|")[0],"en",{numeric:true}));
+    for(const k of keys){
+      cnt++; const arr=groups[k]; const f=arr[0]; const et=etaText(lrtMins(f.time_ch));
+      const row=el("div","row");
+      row.innerHTML=`<div class="route lrtno">${f.route_no}</div>
+        <div class="dest"><div class="d1">${f.dest_ch||""}</div><div class="d2">${st.label} · ${f.train_length?(f.train_length+' 卡'):'月台 '+f.plat}</div></div>
+        <div class="eta">${et.html}</div><div class="chev">▶</div>`;
+      const detail=el("div","detail");
+      detail.innerHTML=arr.slice(0,2).map((r,i)=>{ const mm=lrtMins(r.time_ch); const tt=mm==null?(r.time_ch||"—"):(mm<=0?"即將抵達":mm+" 分鐘"); return `<div class="line"><span>第 ${i+1} 班 · 月台 ${r.plat} · ${r.train_length||"?"} 卡</span><span class="t">${tt}</span></div>`; }).join("")||'<div class="line"><span>暫無下一班資料</span><span></span></div>';
+      row.addEventListener("click",()=> row.classList.toggle("open"));
+      body.appendChild(row); body.appendChild(detail);
+    }
+  }
+  $("#lrtMeta").textContent=cnt+" 條路線";
+}
+
+async function refreshBus(){
+  const btn=$("#busRefresh"); btn.classList.add("spin");
+  await Promise.all([renderBus(), renderLRT()]);
+  $("#busUpd").textContent="更新於 "+nowStr();
+  setTimeout(()=>btn.classList.remove("spin"),500);
+}
+
+let gmReady=false, gmLoading=false, tfInited=false;
+let liveMap=null, detailMap=null, dirService=null, dirRenderer=null;
+let origAuto=null, destAuto=null;
+let origPlace=null, destPlace=null, useMyLoc=false, myLoc=null;
+let timeMode="now";
+let lastRoutes=[];
+
+function loadGMaps(){
+  if(gmReady||gmLoading) return; gmLoading=true;
+  window.initGMaps=()=>{ gmReady=true; initTrafficUI(); };
+  const s=document.createElement("script");
+  s.src=_H+"maps.googleapis.com/maps/api/js?key="+GKEY+"&libraries=places&language=zh-HK&region=HK&callback=initGMaps";
+  s.async=true; s.defer=true;
+  s.onerror=()=>{ $("#tfErr").innerHTML='<div class="err">Google 地圖載入失敗，請確認 API key 已啟用 Maps JavaScript / Directions / Places，並允許本網域。</div>'; };
+  document.head.appendChild(s);
+}
+
+async function ensureMyLoc(){
+  if(myLoc) return myLoc;
+  const loc=await getLocation();
+  myLoc = loc || {lat:FALLBACK.lat, lon:FALLBACK.lon};
+  return myLoc;
+}
+
+async function initTrafficUI(){
+  if(tfInited) return; tfInited=true;
+  dirService=new google.maps.DirectionsService();
+  const c=await ensureMyLoc();
+  const center={lat:c.lat, lng:c.lon};
+  liveMap=new google.maps.Map($("#liveMap"),{
+    center, zoom:14, disableDefaultUI:false, zoomControl:true,
+    fullscreenControl:false, streetViewControl:false, mapTypeControl:false,
+    styles:DARK_MAP
+  });
+  new google.maps.TrafficLayer().setMap(liveMap);
+  try{ new google.maps.Marker({position:center, map:liveMap, title:"我的位置"}); }catch(e){}
+
+  origAuto=new google.maps.places.Autocomplete($("#origInput"),{fields:["geometry","name","formatted_address"], componentRestrictions:{country:"hk"}});
+  origAuto.addListener("place_changed",()=>{ const p=origAuto.getPlace(); if(p&&p.geometry){ origPlace={latlng:p.geometry.location, name:p.name||p.formatted_address}; useMyLoc=false; $("#origLocBtn").classList.remove("on"); } });
+  destAuto=new google.maps.places.Autocomplete($("#destInput"),{fields:["geometry","name","formatted_address"], componentRestrictions:{country:"hk"}});
+  destAuto.addListener("place_changed",()=>{ const p=destAuto.getPlace(); if(p&&p.geometry){ destPlace={latlng:p.geometry.location, name:p.name||p.formatted_address}; } });
+  renderSaveChips();
+}
+
+const DARK_MAP=[
+  {elementType:"geometry",stylers:[{color:"#1b2026"}]},
+  {elementType:"labels.text.stroke",stylers:[{color:"#0b0d10"}]},
+  {elementType:"labels.text.fill",stylers:[{color:"#9aa6b2"}]},
+  {featureType:"road",elementType:"geometry",stylers:[{color:"#2a323b"}]},
+  {featureType:"road",elementType:"labels.text.fill",stylers:[{color:"#b9c2cc"}]},
+  {featureType:"water",elementType:"geometry",stylers:[{color:"#0e1418"}]},
+  {featureType:"poi",elementType:"labels",stylers:[{visibility:"off"}]},
+  {featureType:"transit",elementType:"labels.icon",stylers:[{visibility:"off"}]}
+];
+
+function getSaveList(){ try{ return JSON.parse(localStorage.getItem("tswSaveList")||"[]"); }catch(e){ return []; } }
+function setSaveList(a){ localStorage.setItem("tswSaveList", JSON.stringify(a)); }
+function renderSaveChips(){
+  const box=$("#saveChips"); box.innerHTML=""; const list=getSaveList();
+  list.forEach((it,idx)=>{
+    const chip=el("div","chip");
+    chip.innerHTML=`<span>📌 ${it.name}</span><span class="x">✕</span>`;
+    chip.querySelector("span:first-child").addEventListener("click",()=>{
+      $("#destInput").value=it.name; destPlace={latlng:new google.maps.LatLng(it.lat,it.lng), name:it.name};
+    });
+    chip.querySelector(".x").addEventListener("click",(e)=>{ e.stopPropagation(); const l=getSaveList(); l.splice(idx,1); setSaveList(l); renderSaveChips(); });
+    box.appendChild(chip);
+  });
+}
+function saveCurrentDest(){
+  if(!destPlace||!destPlace.latlng){ alert("請先喺目的地揀一個地點（由建議清單揀），先可以儲存。"); return; }
+  const name=prompt("幫呢個目的地改個名（例如：公司、屋企）", destPlace.name||"");
+  if(!name) return;
+  const l=getSaveList();
+  l.push({name, lat:destPlace.latlng.lat(), lng:destPlace.latlng.lng()});
+  setSaveList(l); renderSaveChips();
+}
+
+function timeToDate(val){
+  if(!val) return new Date();
+  const [h,m]=val.split(":").map(Number);
+  const d=new Date(); d.setHours(h,m,0,0);
+  if(d<new Date()) d.setDate(d.getDate()+1);
+  return d;
+}
+
+async function searchRoutes(){
+  if(!gmReady){ return; }
+  $("#tfErr").innerHTML=""; $("#results").innerHTML='<div class="center-note">搜尋緊路線…</div>';
+  let origin;
+  if(useMyLoc){ const c=await ensureMyLoc(); origin=new google.maps.LatLng(c.lat,c.lon); }
+  else if(origPlace&&origPlace.latlng){ origin=origPlace.latlng; }
+  else if($("#origInput").value.trim()){ origin=$("#origInput").value.trim(); }
+  else { $("#tfErr").innerHTML='<div class="err">請輸入起點，或撳「實時位置」。</div>'; $("#results").innerHTML=""; return; }
+  let destination;
+  if(destPlace&&destPlace.latlng){ destination=destPlace.latlng; }
+  else if($("#destInput").value.trim()){ destination=$("#destInput").value.trim(); }
+  else { $("#tfErr").innerHTML='<div class="err">請輸入目的地。</div>'; $("#results").innerHTML=""; return; }
+
+  const req={ origin, destination, travelMode:google.maps.TravelMode.TRANSIT, provideRouteAlternatives:true, region:"hk", transitOptions:{} };
+  const tv=$("#timeInput").value;
+  if(timeMode==="depart") req.transitOptions.departureTime=timeToDate(tv);
+  else if(timeMode==="arrive") req.transitOptions.arrivalTime=timeToDate(tv);
+  else req.transitOptions.departureTime=new Date();
+
+  dirService.route(req,(res,status)=>{
+    if(status!=="OK"||!res.routes||!res.routes.length){
+      $("#results").innerHTML="";
+      $("#tfErr").innerHTML='<div class="err">搵唔到路線'+(status==="ZERO_RESULTS"?"（呢段時間可能無公共交通）":"（"+status+"）")+'。</div>';
+      return;
+    }
+    lastRoutes=res.routes.slice().sort((a,b)=> a.legs[0].duration.value-b.legs[0].duration.value).slice(0,5);
+    renderResults();
+  });
+}
+
+function modePills(route){
+  const steps=route.legs[0].steps; const out=[];
+  steps.forEach(s=>{
+    if(s.travel_mode==="WALKING"){ if(!out.length||out[out.length-1].k!=="walk") out.push({k:"walk",t:"🚶"}); }
+    else if(s.travel_mode==="TRANSIT"){
+      const tr=s.transit, vt=(tr.line.vehicle&&tr.line.vehicle.type)||"";
+      const rail=/RAIL|SUBWAY|TRAM|METRO|TROLLEY/.test(vt);
+      out.push({k:rail?"rail":"bus", t:(rail?"🚈":"🚌")+" "+(tr.line.short_name||tr.line.name||"")});
+    }
+  });
+  return out;
+}
+function renderResults(){
+  const box=$("#results"); box.innerHTML="";
+  lastRoutes.forEach((route,idx)=>{
+    const leg=route.legs[0];
+    const pills=modePills(route);
+    const transfers=pills.filter(p=>p.k!=="walk").length;
+    const card=el("div","rcard");
+    const dep=leg.departure_time?leg.departure_time.text:""; const arr=leg.arrival_time?leg.arrival_time.text:"";
+    let pillHtml=""; pills.forEach((p,i)=>{ if(i) pillHtml+='<span class="arrow">›</span>'; pillHtml+=`<span class="pill ${p.k}">${p.t}</span>`; });
+    card.innerHTML=`<div class="rtop"><div class="rdur">${leg.duration.text}</div><div class="rtime">${dep&&arr?dep+" – "+arr:""}</div></div>
+      <div class="rmodes">${pillHtml}</div>
+      <div class="rsub">${transfers>0?(transfers-1)+" 次轉乘 · ":""}步行約 ${walkMins(route)} 分鐘 · 全程 ${Math.round(leg.distance.value/100)/10} 公里</div>`;
+    card.addEventListener("click",()=> openDetail(idx));
+    box.appendChild(card);
+  });
+}
+function walkMins(route){ let s=0; route.legs[0].steps.forEach(st=>{ if(st.travel_mode==="WALKING") s+=st.duration.value; }); return Math.round(s/60); }
+
+async function openDetail(idx){
+  const route=lastRoutes[idx]; if(!route) return;
+  $("#tfSearchView").classList.add("hidden");
+  $("#tfDetailView").classList.remove("hidden");
+  if(!detailMap){
+    detailMap=new google.maps.Map($("#detailMap"),{ zoom:13, disableDefaultUI:false, zoomControl:true, fullscreenControl:false, streetViewControl:false, mapTypeControl:false, styles:DARK_MAP });
+    new google.maps.TrafficLayer().setMap(detailMap);
+    dirRenderer=new google.maps.DirectionsRenderer({ map:detailMap, suppressMarkers:false, polylineOptions:{strokeColor:"#3ea6ff", strokeWeight:5} });
+  }
+  dirRenderer.setDirections({routes:[route], request:{travelMode:"TRANSIT"}});
+  try{ dirRenderer.setRouteIndex(0); }catch(e){}
+  renderCondition(route);
+  renderSteps(route);
+}
+
+function renderCondition(route){
+  const box=$("#detailCond");
+  box.innerHTML='<div class="dot" style="background:#6b7682"></div><div><div class="ct">路況分析中…</div><div class="cs">正在比對行車時間</div></div>';
+  const leg=route.legs[0];
+  const dReq={ origin:leg.start_location, destination:leg.end_location, travelMode:google.maps.TravelMode.DRIVING, drivingOptions:{departureTime:new Date(), trafficModel:"bestguess"}, region:"hk" };
+  dirService.route(dReq,(res,status)=>{
+    if(status!=="OK"||!res.routes.length){ box.innerHTML='<div class="dot" style="background:#34c759"></div><div><div class="ct">大致暢順</div><div class="cs">沿途即時路況已顯示喺地圖上（綠/橙/紅）</div></div>'; return; }
+    const dl=res.routes[0].legs[0];
+    const base=dl.duration.value, traf=(dl.duration_in_traffic||dl.duration).value;
+    const ratio=traf/base;
+    let color="#34c759", txt="大致暢順", sub="";
+    const extra=Math.round((traf-base)/60);
+    if(ratio>=1.5){ color="#ff5a5f"; txt="頗為擠塞"; sub=`行車時間比平時多約 ${extra} 分鐘`; }
+    else if(ratio>=1.2){ color="#ffb020"; txt="較為繁忙"; sub=`行車時間比平時多約 ${extra} 分鐘`; }
+    else { sub="道路行車順暢，沿途路況見地圖顏色"; }
+    box.innerHTML=`<div class="dot" style="background:${color}"></div><div><div class="ct">${txt}</div><div class="cs">${sub}（駕車約 ${dl.duration_in_traffic?dl.duration_in_traffic.text:dl.duration.text}）</div></div>`;
+  });
+}
+
+function renderSteps(route){
+  const box=$("#detailSteps"); box.innerHTML="";
+  const steps=route.legs[0].steps;
+  steps.forEach(s=>{
+    if(s.travel_mode==="WALKING"){
+      const node=el("div","step walk");
+      node.innerHTML=`<div class="stbar"><div class="stic">🚶</div><div class="stline"></div></div>
+        <div class="stbody"><div class="s1">步行 ${s.duration.text}</div><div class="s2">${stripHtml(s.instructions||"")}</div><div class="s3">約 ${s.distance.text}</div></div>`;
+      box.appendChild(node);
+    } else if(s.travel_mode==="TRANSIT"){
+      const tr=s.transit, vt=(tr.line.vehicle&&tr.line.vehicle.type)||"";
+      const rail=/RAIL|SUBWAY|TRAM|METRO|TROLLEY/.test(vt);
+      const node=el("div","step transit"+(rail?" rail":""));
+      const lineName=tr.line.short_name||tr.line.name||"";
+      node.innerHTML=`<div class="stbar"><div class="stic">${rail?"🚈":"🚌"}</div><div class="stline"></div></div>
+        <div class="stbody">
+          <div class="s1">${lineName} <span style="color:var(--dim);font-weight:600">往 ${tr.headsign||tr.line.name||""}</span></div>
+          <div class="s2">🔵 ${tr.departure_time?tr.departure_time.text:""} ${tr.departure_stop.name} 上車</div>
+          <div class="s2">🔴 ${tr.arrival_time?tr.arrival_time.text:""} ${tr.arrival_stop.name} 落車</div>
+          <div class="s3">共 ${tr.num_stops} 個站</div>
+        </div>`;
+      box.appendChild(node);
+    }
+  });
+  const leg=route.legs[0];
+  const end=el("div","step");
+  end.innerHTML=`<div class="stbar"><div class="stic">🏁</div></div><div class="stbody"><div class="s1">到達目的地</div><div class="s2">${leg.arrival_time?leg.arrival_time.text:""} · 全程 ${leg.duration.text}</div></div>`;
+  box.appendChild(end);
+}
+function stripHtml(h){ const d=document.createElement("div"); d.innerHTML=h; return d.textContent||""; }
+
+const HKO_STATIONS=[
+  ["天水圍",22.457,114.005],["屯門",22.391,113.977],["元朗公園",22.443,114.027],
+  ["流浮山",22.468,113.983],["石崗",22.435,114.085],["上水",22.502,114.115],
+  ["大埔",22.448,114.175],["沙田",22.402,114.21],["打鼓嶺",22.528,114.156],
+  ["九龍城",22.337,114.182],["深水埗",22.331,114.159],["黃大仙",22.34,114.194],
+  ["觀塘",22.318,114.224],["將軍澳",22.318,114.26],["西貢",22.376,114.274],
+  ["香港天文台",22.302,114.174],["京士柏",22.312,114.173],["黃竹坑",22.248,114.168],
+  ["跑馬地",22.272,114.182],["香港公園",22.278,114.16],["赤柱",22.218,114.213],
+  ["筲箕灣",22.279,114.235],["赤鱲角",22.309,113.922],["東涌",22.288,113.943],
+  ["長洲",22.201,114.027],["大美督",22.475,114.236],["青衣",22.345,114.108]
+];
+function haversine(a,b,c,d){const R=6371,r=Math.PI/180;const dLat=(c-a)*r,dLon=(d-b)*r;const x=Math.sin(dLat/2)**2+Math.cos(a*r)*Math.cos(c*r)*Math.sin(dLon/2)**2;return 2*R*Math.asin(Math.sqrt(x));}
+function nearestStation(lat,lon){let best=null,bd=1e9;for(const s of HKO_STATIONS){const d=haversine(lat,lon,s[1],s[2]);if(d<bd){bd=d;best=s;}}return best;}
+const WMO={0:["晴朗","☀️"],1:["大致天晴","🌤️"],2:["部分多雲","⛅"],3:["多雲","☁️"],45:["有霧","🌫️"],48:["霧凇","🌫️"],51:["毛毛雨","🌦️"],53:["毛毛雨","🌦️"],55:["毛毛雨","🌧️"],56:["凍雨","🌧️"],57:["凍雨","🌧️"],61:["小雨","🌦️"],63:["中雨","🌧️"],65:["大雨","🌧️"],66:["凍雨","🌧️"],67:["凍雨","🌧️"],71:["小雪","🌨️"],73:["中雪","🌨️"],75:["大雪","❄️"],77:["雪粒","🌨️"],80:["驟雨","🌦️"],81:["驟雨","🌧️"],82:["狂風驟雨","⛈️"],85:["陣雪","🌨️"],86:["陣雪","❄️"],95:["雷暴","⛈️"],96:["雷暴冰雹","⛈️"],99:["雷暴冰雹","⛈️"]};
+function wmo(c){return WMO[c]||["—","🌡️"];}
+function warnClass(code,name){const s=(code||"")+(name||"");if(/RAIN|暴雨/.test(s))return"rain";if(/TS|雷暴/.test(s))return"ts";if(/HOT|酷熱|炎熱/.test(s))return"hot";if(/COLD|寒冷/.test(s))return"cold";if(/WIND|TC|風球|颱風|強風|烈風/.test(s))return"wind";return"other";}
+async function loadWeather(lat,lon){
+  $("#wxErr").innerHTML=""; const st=nearestStation(lat,lon); $("#wxLoc").textContent=st?st[0]:"我的位置";
+  const omURL=`${_H}api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code,precipitation&hourly=temperature_2m,precipitation_probability,precipitation,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=Asia%2FHong_Kong&forecast_days=7`;
+  const [om,hkoCur,hkoWarn]=await Promise.all([
+    fetchJSON(omURL).catch(()=>null),
+    fetchJSON(_H+"data.weather.gov.hk/weatherAPI/opendata/weather.php?dataType=rhrread&lang=tc").catch(()=>null),
+    fetchJSON(_H+"data.weather.gov.hk/weatherAPI/opendata/weather.php?dataType=warnsum&lang=tc").catch(()=>null)
+  ]);
+  let temp=null,cond="—",icon="🌡️";
+  if(hkoCur&&hkoCur.temperature&&hkoCur.temperature.data){ const m=hkoCur.temperature.data.find(d=> st && d.place===st[0]); if(m) temp=m.value; }
+  if(om&&om.current){ if(temp==null) temp=Math.round(om.current.temperature_2m); const w=wmo(om.current.weather_code); cond=w[0]; icon=w[1]; }
+  $("#wxTemp").textContent=temp==null?"--":Math.round(temp); $("#wxCond").textContent=icon+" "+cond;
+  if(om&&om.daily){ $("#wxHi").textContent=Math.round(om.daily.temperature_2m_max[0]); $("#wxLo").textContent=Math.round(om.daily.temperature_2m_min[0]); }
+  const wbox=$("#wxWarns"); wbox.innerHTML=""; let hasRainWarn=false;
+  if(hkoWarn&&typeof hkoWarn==="object"){ const codes=Object.keys(hkoWarn); if(!codes.length){ wbox.appendChild(el("div","warn other",'<span class="dot"></span>現時無天氣警告')); } for(const c of codes){ const w=hkoWarn[c]; if(!w||!w.name) continue; const cls=warnClass(w.code||c,w.name); if(cls==="rain"||cls==="ts") hasRainWarn=true; wbox.appendChild(el("div","warn "+cls,`<span class="dot"></span>${w.name}`)); } }
+  else { wbox.appendChild(el("div","warn other",'<span class="dot"></span>警告資料暫時無法載入')); }
+  let rainAt=null,maxProb=0;
+  if(om&&om.hourly){ const H=om.hourly, now=new Date(); const hbox=$("#wxHourly"); hbox.innerHTML=""; let shown=0;
+    for(let i=0;i<H.time.length&&shown<14;i++){ const t=new Date(H.time[i]); if(t<now-3600000) continue; const prob=H.precipitation_probability?(H.precipitation_probability[i]||0):0; const pr=H.precipitation?(H.precipitation[i]||0):0; const w=wmo(H.weather_code[i]); if(prob>maxProb) maxProb=prob; if(rainAt===null&&(prob>=50||pr>=0.3)&&t>=now) rainAt=t; const isNow=shown===0; const cell=el("div","hour"+(isNow?" nowmark":"")); cell.innerHTML=`<div class="h">${isNow?"而家":t.getHours()+"時"}</div><div class="ic">${w[1]}</div><div class="p">${prob>=20?prob+"%":""}</div><div class="t">${Math.round(H.temperature_2m[i])}°</div>`; hbox.appendChild(cell); shown++; }
+  }
+  const curPr=om&&om.current?om.current.precipitation:0;
+  let umbEmoji="🌂",umbBig="應該唔使帶遮",umbSmall="未來幾個鐘降雨機會低。";
+  if(hasRainWarn||curPr>0.1){ umbEmoji="☔"; umbBig="要帶遮！"; umbSmall=hasRainWarn?"天文台已發出雨/雷暴警告。":"而家落緊雨。"; }
+  else if(maxProb>=50){ umbEmoji="☂️"; umbBig="建議帶遮"; umbSmall=`未來降雨機會高達 ${maxProb}%。`; }
+  else if(maxProb>=30){ umbEmoji="☂️"; umbBig="最好帶把遮"; umbSmall=`未來降雨機會約 ${maxProb}%，以防萬一。`; }
+  $("#umbEmoji").textContent=umbEmoji; $("#umbBig").textContent=umbBig;
+  if(rainAt){ const rt=rainAt.toLocaleTimeString("zh-HK",{hour:"2-digit",minute:"2-digit",hour12:false}); umbSmall+=` 預計約 ${rt} 開始有雨。`; }
+  else if(umbBig==="應該唔使帶遮"){ umbSmall="未來 14 個鐘預料唔會落雨。"; }
+  $("#umbSmall").textContent=umbSmall;
+  if(om&&om.daily){ const D=om.daily, dbox=$("#wxDaily"); dbox.innerHTML=""; const days=["日","一","二","三","四","五","六"]; let gMin=999,gMax=-999; D.temperature_2m_min.forEach(v=>gMin=Math.min(gMin,v)); D.temperature_2m_max.forEach(v=>gMax=Math.max(gMax,v));
+    for(let i=0;i<D.time.length;i++){ const d=new Date(D.time[i]); const w=wmo(D.weather_code[i]); const lo=D.temperature_2m_min[i], hi=D.temperature_2m_max[i]; const prob=D.precipitation_probability_max?D.precipitation_probability_max[i]:0; const left=((lo-gMin)/(gMax-gMin||1))*100; const width=((hi-lo)/(gMax-gMin||1))*100; const row=el("div","day"); row.innerHTML=`<div class="dn">${i===0?"今日":"星期"+days[d.getDay()]}</div><div class="di">${w[1]}</div><div class="dp">${prob>=20?prob+"%":""}</div><div class="lo">${Math.round(lo)}°</div><div class="bar"><i style="left:${left}%;width:${Math.max(width,8)}%"></i></div><div class="hi">${Math.round(hi)}°</div>`; dbox.appendChild(row); }
+  }
+  $("#wxUpd").textContent="更新於 "+nowStr();
+}
+let COORDS=null;
+function getLocation(){ return new Promise(res=>{ if(!navigator.geolocation){ res(null); return; } navigator.geolocation.getCurrentPosition(p=>res({lat:p.coords.latitude,lon:p.coords.longitude}),()=>res(null),{enableHighAccuracy:true,timeout:8000,maximumAge:60000}); }); }
+async function refreshWx(){
+  const btn=$("#wxRefresh"); btn.classList.add("spin");
+  if(!COORDS){ const loc=await getLocation(); COORDS=loc||{lat:FALLBACK.lat,lon:FALLBACK.lon,fallback:true}; }
+  try{ await loadWeather(COORDS.lat,COORDS.lon); if(COORDS.fallback){ $("#wxLoc").textContent+="（預設天水圍）"; } }
+  catch(e){ $("#wxErr").innerHTML='<div class="err">天氣資料載入失敗，請檢查網絡 / 位置權限後重試。</div>'; }
+  setTimeout(()=>btn.classList.remove("spin"),500);
+}
+
+document.querySelectorAll("#modeSeg .seg-btn").forEach(b=>{
+  b.addEventListener("click",()=>{
+    document.querySelectorAll("#modeSeg .seg-btn").forEach(x=>x.classList.remove("active"));
+    b.classList.add("active"); const mode=b.dataset.mode;
+    $("#grpBus").classList.toggle("hidden", mode!=="bus");
+    $("#grpLrt").classList.toggle("hidden", mode!=="lrt");
+  });
+});
+
+$("#origLocBtn").addEventListener("click", async()=>{
+  useMyLoc=!useMyLoc;
+  $("#origLocBtn").classList.toggle("on", useMyLoc);
+  if(useMyLoc){ origPlace=null; $("#origInput").value="📍 我的實時位置"; await ensureMyLoc(); }
+  else { $("#origInput").value=""; }
+});
+$("#saveDestBtn").addEventListener("click", saveCurrentDest);
+$("#goBtn").addEventListener("click", searchRoutes);
+$("#detailBack").addEventListener("click",()=>{ $("#tfDetailView").classList.add("hidden"); $("#tfSearchView").classList.remove("hidden"); });
+document.querySelectorAll("#timeSeg button").forEach(b=>{
+  b.addEventListener("click",()=>{
+    document.querySelectorAll("#timeSeg button").forEach(x=>x.classList.remove("active"));
+    b.classList.add("active"); timeMode=b.dataset.tm;
+    const ti=$("#timeInput"); ti.classList.toggle("hidden", timeMode==="now");
+    if(timeMode!=="now" && !ti.value){ const d=new Date(); ti.value=String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0"); }
+  });
+});
+
+let wxLoaded=false;
+document.querySelectorAll(".tab").forEach(t=>{
+  t.addEventListener("click",()=>{
+    document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active")); t.classList.add("active");
+    const tab=t.dataset.tab;
+    $("#pageBus").classList.toggle("hidden", tab!=="bus");
+    $("#pageTraffic").classList.toggle("hidden", tab!=="traffic");
+    $("#pageWx").classList.toggle("hidden", tab!=="wx");
+    if(tab==="wx" && !wxLoaded){ wxLoaded=true; refreshWx(); }
+    if(tab==="traffic"){ loadGMaps(); }
+  });
+});
+$("#busRefresh").addEventListener("click", refreshBus);
+$("#wxRefresh").addEventListener("click",()=>{ COORDS=null; refreshWx(); });
+
+refreshBus();
+setInterval(()=>{ if(!$("#pageBus").classList.contains("hidden")) refreshBus(); }, 30000);
+setInterval(()=>{ if(!$("#pageWx").classList.contains("hidden")) refreshWx(); }, 600000);
+document.addEventListener("visibilitychange",()=>{ if(!document.hidden){ if(!$("#pageBus").classList.contains("hidden")) refreshBus(); } });
+</script>
+</body>
+</html>
